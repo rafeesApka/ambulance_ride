@@ -1,0 +1,67 @@
+__pycache__/
+*.pyc
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environment
+venv/
+.env/
+.venv/
+
+# Environment variables
+.env
+*.env
+
+# Testing and coverage
+.coverage
+.tox/
+.nox/
+.pytest_cache/
+htmlcov/
+coverage.xml
+
+# IDE/editor configs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Compiled or packaged files
+*.egg
+*.egg-info/
+dist/
+build/
+*.manifest
+*.spec
+
+# pipenv, poetry, etc.
+Pipfile.lock
+poetry.lock
+
+# mypy / type checking
+.mypy_cache/
+.dmypy.json
+
+# Jupyter notebooks checkpoint files
+.ipynb_checkpoints
+
+# Docker
+*.pid
+*.tar
+*.gz
+
+# Local databases
+*.sqlite3
+db.sqlite3
