@@ -1,5 +1,5 @@
 from sqladmin import Admin, ModelView
-from .models import User,Location,MediaData
+from .models import User, Location, MediaData, Driver
 from .db import engine
 from fastapi import FastAPI
 from markupsafe import Markup
@@ -23,9 +23,12 @@ class MediaAdmin(ModelView, model=MediaData):
         "image_path": lambda m, attr: Markup(
             f'<img src="/{attr}" style="max-height: 100px;" />') if attr else ""
     }
+class DriverAdmin(ModelView,model=Driver):
+    column_list = "__all__"
 
 def setup_admin(app: FastAPI):
     admin = Admin(app, engine)
     admin.add_view(UserAdmin)
     admin.add_view(LocationAdmin)
     admin.add_view(MediaAdmin)
+    admin.add_view(DriverAdmin)

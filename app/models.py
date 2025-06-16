@@ -27,15 +27,17 @@ class Location(Base):
     user = relationship("User", back_populates="location")
 
 
+from sqlalchemy.dialects.postgresql import ARRAY  # PostgreSQL only
+
 class MediaData(Base):
     __tablename__ = "media_data"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-
+    media_id = Column(String, nullable=True, unique=True)
     mobile_number = Column(String, nullable=True)
-    image_path = Column(String, nullable=True)
-    audio_path = Column(String, nullable=True)
+    image_path = Column(ARRAY(String), nullable=True)  # <- changed to list
+    audio_path = Column(ARRAY(String), nullable=True)
 
     user = relationship("User", back_populates="media_data")
 
@@ -44,15 +46,15 @@ class MediaData(Base):
 
 
 
-# class Driver(Base):
-#     __tablename__ = "drivers"
-#     id = Column(Integer, primary_key=True, index=True)
-#     first_name = Column(String)
-#     last_name = Column(String)
-#     mobile = Column(String, unique=True)
-#     ambulance_number = Column(String, unique=True)
-#     is_available = Column(Boolean, default=True)
-#     created_at = Column(DateTime, default=datetime.utcnow)
+class Driver(Base):
+    __tablename__ = "drivers"
+    id = Column(Integer, primary_key=True, index=True)
+    first_name = Column(String)
+    last_name = Column(String)
+    mobile = Column(String, unique=True)
+    ambulance_number = Column(String, unique=True)
+    is_available = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 #
 # class DriverLocation(Base):
 #     __tablename__ = "driver_locations"

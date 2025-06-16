@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel,constr
 from typing import Optional
 from datetime import datetime
 
@@ -43,9 +43,9 @@ class LocationCreate(BaseModel):
 
 class LocationOut(BaseModel):
     id: int
+    media_id:str
 
-    class Config:
-        orm_mode = True
+
 
 class MediaOut(BaseModel):
     mobile_number: Optional[str]
@@ -68,3 +68,25 @@ class MediaOut(BaseModel):
 # class BookingRequest(BaseModel):
 #     user_latitude: float
 #     user_longitude: float
+
+class DriverCreate(BaseModel):
+    first_name: str
+    last_name: str
+    mobile: constr(min_length=10, max_length=15)
+    ambulance_number: str
+
+class DriverOut(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    mobile: str
+    ambulance_number: str
+    is_available: bool
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class TokenRequest(BaseModel):
+    user_id: int
+    user_mobile: str

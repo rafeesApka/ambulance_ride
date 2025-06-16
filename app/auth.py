@@ -24,10 +24,15 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
+    print("innnnnnn")
     token = credentials.credentials
+    print(token,"token")
     try:
+        print("in of try")
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        print(111111)
         user_id = payload.get("user_id")
+        print(user_id,"user id ")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
         result = await db.execute(select(User).where(User.id == user_id))
