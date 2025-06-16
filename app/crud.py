@@ -98,25 +98,37 @@ async def update_or_create_media(
         media.mobile_number = None
         media.media_id = str(media_id)
 
+    # if images:
+    #     image_path = []
+    #     for image in images:
+    #         if image.filename:
+    #             path = await save_file(image, "images")
+    #             print(path,"image path")
+    #             image_path.append(path)
+    #     print(image_path,"list of paths")
+    #     media.image_path = image_path
+    #
+    # if audios:
+    #     audio_paths = []
+    #     for audio in audios:
+    #         if audio.filename:
+    #             path = await save_file(audio, "audio")
+    #             print(path,"audio path")
+    #             audio_paths.append(path)
+    #     media.audio_path = audio_paths
     if images:
-        image_path = []
-        for image in images:
-            if image.filename:
-                path = await save_file(image, "images")
-                image_path.append(path)
-        media.image_path = image_path
-
+        media.image_path = [
+            await save_file(image, "images")
+            for image in images if image.filename
+        ]
     if audios:
-        audio_paths = []
-        for audio in audios:
-            if audio.filename:
-                path = await save_file(audio, "audio")
-                audio_paths.append(path)
-        media.audio_paths = audio_paths
-
+        media.audio_path = [
+            await save_file(audio, "audio")
+            for audio in audios if audio.filename
+        ]
     if mobile_number is not None:
         media.mobile_number = mobile_number
-
+    print(type(media.image_path), media.image_path)
     db.add(media)
     await db.commit()
     await db.refresh(media)

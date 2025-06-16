@@ -4,7 +4,7 @@ from fastapi import FastAPI, Depends,Header,WebSocket,WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from .crud import update_or_create_media
-from .models import User
+from .models import User,Driver
 from sqlalchemy.future import select
 from fastapi import HTTPException, Depends
 from uuid import UUID
@@ -105,7 +105,21 @@ async def set_or_update_location(
     current_user: User = Depends(get_current_user)
 ):
     media_id = await crud.create_or_update_location(db, current_user.id, location_data)
-    return media_id
+    result = await db.execute(
+        select(Driver).where(Driver.id == 1)
+    )
+    driver = result.scalar_one_or_none()
+
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found")
+
+    return {
+        "first_name": driver.first_name,
+        "mobile": driver.mobile,
+        "ambulance_number": driver.ambulance_number,
+        "media_id": media_id,
+        "eta_minutes": 12,
+    }
 
 from fastapi import UploadFile, File, Form
 

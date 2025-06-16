@@ -90,3 +90,14 @@ class DriverOut(BaseModel):
 class TokenRequest(BaseModel):
     user_id: int
     user_mobile: str
+
+class DriverInfo(BaseModel):
+    first_name: str
+    mobile: str
+    ambulance_number: str
+    media_id: Optional[str]
+    eta_minutes: Optional[int]
+
+
+    class Config:
+        orm_mode = True
