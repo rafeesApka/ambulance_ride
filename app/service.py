@@ -204,6 +204,7 @@ async def set_or_update_location(
             eta = DEFAULT_ETA_MINUTES
 
         driver_eta_list.append({
+            "media_id":media_id,
             "driver_id": driver.id,
             "first_name": driver.first_name,
             "mobile": driver.mobile,
