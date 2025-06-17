@@ -5,7 +5,7 @@ from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from .models import User
+from .models import User,Driver
 from .db import get_db
 from jwt import PyJWTError, ExpiredSignatureError
 
@@ -15,10 +15,53 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 240
 
 security = HTTPBearer()
 
-def create_access_token(user_id: str,user_mobile:str):
+def create_access_token(user_id: int,user_mobile:str):
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {"user_id": user_id,"user_mobile":user_mobile, "exp": expire}
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+from datetime import datetime, timedelta
+from jose import jwt,JWTError
+
+
+def create_driver_access_token(driver_id: int, mobile: str, ambulance_number: str) -> str:
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    payload = {
+        "driver_id": driver_id,
+        "mobile": mobile,
+        "ambulance_number": ambulance_number,
+        "exp": expire
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+async def get_current_driver(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        driver_id = payload.get("driver_id")
+        mobile = payload.get("mobile")
+        ambulance_number = payload.get("ambulance_number")
+        print(driver_id,mobile,ambulance_number)
+
+        if not driver_id or not mobile or not ambulance_number:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        result = await db.execute(
+            select(Driver).where(Driver.id == driver_id)
+        )
+        driver = result.scalar_one_or_none()
+
+        if driver is None:
+            raise HTTPException(status_code=401, detail="Driver not found")
+
+        return driver
+
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -42,7 +85,7 @@ async def get_current_user(
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.PyJWTError:
+    except jwt.JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 

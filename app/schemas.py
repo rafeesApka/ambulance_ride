@@ -1,4 +1,4 @@
-from pydantic import BaseModel,constr
+from pydantic import BaseModel,constr,Field
 from typing import Optional
 from datetime import datetime
 
@@ -86,7 +86,10 @@ class DriverOut(BaseModel):
 
     class Config:
         orm_mode = True
-
+class DriverWithTokenOut(BaseModel):
+    access_token: str
+    token_type: str
+    driver: DriverOut
 class TokenRequest(BaseModel):
     user_id: int
     user_mobile: str
@@ -101,3 +104,17 @@ class DriverInfo(BaseModel):
 
     class Config:
         orm_mode = True
+
+# from pydantic import BaseModel, Field
+
+class LocationUpdateRequest(BaseModel):
+    latitude: float = Field(..., example=10.123456)
+    longitude: float = Field(..., example=76.543210)
+class DriverTokenInput(BaseModel):
+    driver_id: int
+    mobile: str
+    ambulance_number: str
+
+class UserTokenInput(BaseModel):
+    user_id: int
+    user_mobile: str

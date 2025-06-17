@@ -55,6 +55,18 @@ class Driver(Base):
     ambulance_number = Column(String, unique=True)
     is_available = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    location = relationship("DriverLocation", back_populates="driver", uselist=False)
+
+
+class DriverLocation(Base):
+    __tablename__ = "driver_locations"
+    id = Column(Integer, primary_key=True)
+    driver_id = Column(Integer, ForeignKey("drivers.id"), unique=True)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Back-reference to Driver
+    driver = relationship("Driver", back_populates="location")
 #
 # class DriverLocation(Base):
 #     __tablename__ = "driver_locations"
