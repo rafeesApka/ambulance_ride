@@ -11,7 +11,8 @@ from sqlalchemy.future import select
 from fastapi import HTTPException, Depends
 from uuid import UUID
 from .schemas import AuthRequest, AuthResponse, UserCreate, UserOut, LocationOut, LocationCreate, MediaOut, \
-    DriverCreate, DriverOut, TokenRequest, DriverWithTokenOut, LocationUpdateRequest, UserTokenInput, DriverTokenInput
+    DriverCreate, DriverOut, TokenRequest, DriverWithTokenOut, LocationUpdateRequest, UserTokenInput, DriverTokenInput, \
+    AssignmentUpdate, AssignmentOut
 from .auth import create_access_token, get_current_user, create_driver_access_token, decode_token, get_current_driver
 from . import crud
 from .admin import setup_admin
@@ -198,7 +199,7 @@ async def set_or_update_location(
         driver_eta_list.append({
             "media_id":media_id,
             "driver_id": driver.id,
-            "first_name": driver.first_name,
+            "first_name": driver.driver_name,
             "mobile": driver.mobile,
             "ambulance_number": driver.ambulance_number,
             "eta_minutes": eta
@@ -229,6 +230,14 @@ async def set_or_update_location(
         db.add(assignment)
 
     await db.commit()
+    best_driver["assignment_id"] = assignment.id
+    await notify_driver_of_assignment(
+        db=db,
+        driver_id=best_driver["driver_id"],
+        user_id=current_user.id,
+        media_id=str(media_id),
+        assignment_id=assignment.id
+    )
 
     return best_driver
 
@@ -635,3 +644,93 @@ async def generate_user_token(data: UserTokenInput):
 #         "audio_paths": media.audio_path,
 #     }
 #     await manager.send_message(driver.id, message)
+
+@app.post("/ride/respond")
+async def respond_to_ride(
+    data: AssignmentUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_driver = Depends(get_current_driver)
+):
+    # Step 1: Fetch assignment
+    result = await db.execute(
+        select(Assignment).where(Assignment.id == data.assignment_id)
+    )
+    assignment = result.scalar_one_or_none()
+
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    if assignment.driver_id != current_driver.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if assignment.status != "pending":
+        raise HTTPException(status_code=400, detail="Already responded")
+
+    # Step 2: Update status
+    assignment.status = data.status
+    assignment.responded_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(assignment)
+
+    if data.status == "accepted":
+        # Step 3: Get user details
+        user_result = await db.execute(select(User).where(User.id == assignment.user_id))
+        user = user_result.scalar_one_or_none()
+
+        location_result = await db.execute(select(Location).where(Location.user_id == assignment.user_id))
+        location = location_result.scalar_one_or_none()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return {
+            "message": "Ride accepted",
+            "user": {
+                "id": user.id,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "mobile": user.mobile
+            },
+            "location": {
+                "latitude": location.latitude if location else None,
+                "longitude": location.longitude if location else None,
+                "landmark": location.landmark if location else None
+            }
+        }
+
+    else:
+        return {"message": "Ride request denied by driver"}
+
+async def notify_driver_of_assignment(
+    db: AsyncSession,
+    driver_id: int,
+    user_id: int,
+    media_id: str,
+    assignment_id: int
+):
+    print("in of notify")
+    # Fetch user and location
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+
+    location_result = await db.execute(select(Location).where(Location.user_id == user_id))
+    location = location_result.scalar_one_or_none()
+
+    if not user or not location:
+        print(f"Failed to fetch user or location for driver {driver_id}")
+        return
+
+    # Prepare and send WebSocket message
+    await manager.send_message(driver_id, {
+        "user_id": user.id,
+        "first_name": user.first_name,
+        "mobile": user.mobile,
+        "location": {
+            "latitude": location.latitude,
+            "longitude": location.longitude,
+            "landmark": location.landmark,
+        },
+        "message": "You have a new ride request from a user.",
+        "assignment_id": assignment_id,
+        "media_id": media_id,
+    })

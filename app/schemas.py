@@ -1,5 +1,5 @@
 from pydantic import BaseModel,constr,Field
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime
 
 class AuthRequest(BaseModel):
@@ -124,3 +124,17 @@ class DriverTokenInput(BaseModel):
 class UserTokenInput(BaseModel):
     user_id: int
     user_mobile: str
+
+class AssignmentUpdate(BaseModel):
+    assignment_id: int
+    status: Literal["accepted", "denied"]
+
+class AssignmentOut(BaseModel):
+    id: int
+    user_id: int
+    driver_id: int
+    status: str
+    responded_at: datetime | None
+
+    class Config:
+        orm_mode = True

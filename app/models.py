@@ -78,8 +78,7 @@ class Assignment(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
     driver_id = Column(Integer, ForeignKey("drivers.id"), nullable=False)
-    assigned_at = Column(DateTime, default=datetime.utcnow)
-
+    responded_at = Column(DateTime, nullable=True)
     user = relationship("User", back_populates="assignment")
     driver = relationship("Driver", back_populates="assignments")
 
