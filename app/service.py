@@ -184,6 +184,7 @@ async def set_or_update_location(
     driver_eta_list = []
 
     for driver in drivers:
+        print(driver.driver_name,"driver name")
         if not driver.location:
             continue  # skip if location is not available
 
@@ -489,8 +490,9 @@ async def list_all_drivers(db: AsyncSession = Depends(get_db)):
 
 @app.websocket("/ws/driver/{driver_id}")
 async def websocket_endpoint(websocket: WebSocket, driver_id: int):
-    print(f"Driver {driver_id} connected via WebSocket")
+
     await manager.connect(driver_id, websocket)
+    print(f"Driver {driver_id} connected via WebSocket")
     try:
         while True:
             await websocket.receive_text()  # Keep alive
@@ -719,7 +721,19 @@ async def notify_driver_of_assignment(
     if not user or not location:
         print(f"Failed to fetch user or location for driver {driver_id}")
         return
-
+    print({
+        "user_id": user.id,
+        "first_name": user.first_name,
+        "mobile": user.mobile,
+        "location": {
+            "latitude": location.latitude,
+            "longitude": location.longitude,
+            "landmark": location.landmark,
+        },
+        "message": "You have a new ride request from a user.",
+        "assignment_id": assignment_id,
+        "media_id": media_id,
+    })
     # Prepare and send WebSocket message
     await manager.send_message(driver_id, {
         "user_id": user.id,

@@ -13,8 +13,10 @@ class ConnectionManager:
         self.active_connections.pop(driver_id, None)
 
     async def send_message(self, driver_id: int, message: dict):
+        print(self.active_connections,"active connectionss")
         websocket = self.active_connections.get(driver_id)
         if websocket:
+            print("in of if socket")
             await websocket.send_json(message)
 
     def get_socket_by_driver_id(self, driver_id: int):
