@@ -1,5 +1,5 @@
 from sqladmin import Admin, ModelView
-from .models import User, Location, MediaData, Driver, DriverLocation
+from .models import User, Location, MediaData, Driver, DriverLocation, Assignment
 from .db import engine
 from fastapi import FastAPI
 from markupsafe import Markup
@@ -27,6 +27,9 @@ class DriverAdmin(ModelView,model=Driver):
     column_list = "__all__"
 class DriverLocationAdmin(ModelView,model=DriverLocation):
     column_list = "__all__"
+
+class AssignmentAdmin(ModelView,model=Assignment):
+    column_list = "__all__"
 def setup_admin(app: FastAPI):
     admin = Admin(app, engine)
     admin.add_view(UserAdmin)
@@ -34,3 +37,4 @@ def setup_admin(app: FastAPI):
     admin.add_view(MediaAdmin)
     admin.add_view(DriverAdmin)
     admin.add_view(DriverLocationAdmin)
+    admin.add_view(AssignmentAdmin)

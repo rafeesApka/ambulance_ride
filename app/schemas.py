@@ -70,15 +70,21 @@ class MediaOut(BaseModel):
 #     user_longitude: float
 
 class DriverCreate(BaseModel):
-    first_name: str
-    last_name: str
+    owner_name: str
+    owner_number: str
+    owner_email: str
+    owner_number: str
+    driver_name: str
     mobile: constr(min_length=10, max_length=15)
     ambulance_number: str
 
 class DriverOut(BaseModel):
     id: int
-    first_name: str
-    last_name: str
+    owner_name: str
+    owner_number: str
+    owner_email: str
+    owner_number: str
+    driver_name: str
     mobile: str
     ambulance_number: str
     is_available: bool

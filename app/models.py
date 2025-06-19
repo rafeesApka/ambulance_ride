@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column,UniqueConstraint, Integer, String, Float, Boolean, ForeignKey, DateTime
 from datetime import datetime
 from app.db import Base
 from sqlalchemy.orm import relationship
@@ -13,6 +13,7 @@ class User(Base):
     location = relationship("Location", back_populates="user", uselist=False)
 
     media_data = relationship("MediaData", back_populates="user", uselist=False)
+    assignment = relationship("Assignment", back_populates="user", uselist=False)
 
 
 class Location(Base):
@@ -49,13 +50,16 @@ class MediaData(Base):
 class Driver(Base):
     __tablename__ = "drivers"
     id = Column(Integer, primary_key=True, index=True)
-    first_name = Column(String)
-    last_name = Column(String)
+    owner_name = Column(String)
+    owner_number = Column(String)
+    owner_email = Column(String)
+    driver_name = Column(String)
     mobile = Column(String, unique=True)
     ambulance_number = Column(String, unique=True)
     is_available = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     location = relationship("DriverLocation", back_populates="driver", uselist=False)
+    assignments = relationship("Assignment", back_populates="driver")
 
 
 class DriverLocation(Base):
@@ -67,6 +71,19 @@ class DriverLocation(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     # Back-reference to Driver
     driver = relationship("Driver", back_populates="location")
+
+class Assignment(Base):
+    __tablename__ = "assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    driver_id = Column(Integer, ForeignKey("drivers.id"), nullable=False)
+    assigned_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="assignment")
+    driver = relationship("Driver", back_populates="assignments")
+
+    __table_args__ = (UniqueConstraint('user_id', name='unique_user_assignment'),)
 #
 # class DriverLocation(Base):
 #     __tablename__ = "driver_locations"

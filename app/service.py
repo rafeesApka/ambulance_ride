@@ -1,10 +1,12 @@
-from typing import List
+import os
+from datetime import datetime
+from typing import List, Optional
 
-from fastapi import FastAPI, Depends,Header,WebSocket,WebSocketDisconnect
+from fastapi import FastAPI, Depends,Header,WebSocket,WebSocketDisconnect,BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from .crud import update_or_create_media
-from .models import User, Driver, DriverLocation,Location
+from .models import User, Driver, DriverLocation, Location, MediaData, Assignment
 from sqlalchemy.future import select
 from fastapi import HTTPException, Depends
 from uuid import UUID
@@ -20,6 +22,7 @@ from sqlalchemy.orm import joinedload
 app = FastAPI()
 app.mount("/uploads", StaticFiles(directory="app/uploads"), name="uploads")
 setup_admin(app)
+connected_drivers = {}  # driver_id -> websocket
 
 @app.get("/users")
 async def get_users(db: AsyncSession = Depends(get_db)):
@@ -96,18 +99,7 @@ async def get_my_location(
     if not location:
         raise HTTPException(status_code=404, detail="Location not set")
     return location
-# @app.get("/get-eta")
-# async def get_eta(
-#     user_lat: float,
-#     user_lon: float,
-#     driver_lat: float,
-#     driver_lon: float
-# ):
-#     try:
-#         eta = await get_eta_from_openrouteservice(user_lat, user_lon, driver_lat, driver_lon)
-#         return {"eta_minutes": eta}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
+
 #
 DEFAULT_ETA_MINUTES = 100  # fallback ETA in minutes
 # @app.post("/me/location")
@@ -220,31 +212,185 @@ async def set_or_update_location(
     best_driver = sorted_drivers[0]
     print(best_driver,"best_drivers")
 
+    # 🔁 Create or update the assignment record
+    assignment_result = await db.execute(
+        select(Assignment).where(Assignment.user_id == current_user.id)
+    )
+    assignment = assignment_result.scalar_one_or_none()
+
+    if assignment:
+        assignment.driver_id = best_driver["driver_id"]
+        assignment.assigned_at = datetime.utcnow()
+    else:
+        assignment = Assignment(
+            user_id=current_user.id,
+            driver_id=best_driver["driver_id"]
+        )
+        db.add(assignment)
+
+    await db.commit()
+
     return best_driver
 
 from fastapi import UploadFile, File, Form
 
 
 
+# @app.post("/me/upload/image")
+# async def upload_image(
+#     images: List[UploadFile] = File(...),
+#     media_id: UUID = Form(...),
+#     db: AsyncSession = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     if not images or all(not img.filename for img in images):
+#         raise HTTPException(status_code=400, detail="At least one valid image file is required.")
+#
+#     media = await update_or_create_media(
+#         db=db,
+#         user_id=current_user.id,
+#         images=images,
+#         media_id=media_id
+#     )
+#     return {"message": "Images uploaded successfully"}
+
+# @app.post("/me/upload/image")
+# async def upload_image(
+#         images: List[UploadFile] = File(...),
+#         media_id: UUID = Form(...),
+#         db: AsyncSession = Depends(get_db),
+#         current_user: User = Depends(get_current_user),
+#
+# ):
+#     background_tasks = BackgroundTasks
+#     if not images or all(not img.filename for img in images):
+#         raise HTTPException(status_code=400, detail="At least one valid image file is required.")
+#
+#     # Step 1: Save/upload media
+#     media = await update_or_create_media(
+#         db=db,
+#         user_id=current_user.id,
+#         images=images,
+#         media_id=media_id
+#     )
+#
+#     # Step 2: Fetch assigned driver
+#     result = await db.execute(
+#         select(Assignment).where(Assignment.user_id == current_user.id)
+#     )
+#     assignment = result.scalar_one_or_none()
+#
+#     if assignment:
+#         driver_id = assignment.driver_id
+#
+#         # Step 3: Fetch image paths to notify
+#         image_paths = media.image_path if media.image_path else []
+#
+#         # Step 4: Notify the driver in background
+#         background_tasks.add_task(notify_driver, driver_id, {
+#             "user_id": current_user.id,
+#             "media_id": str(media_id),
+#             "image_paths": image_paths,
+#             "message": "User uploaded new images"
+#         })
+#
+#     return {"message": "Images uploaded successfully"}
+
+from fastapi import WebSocket
+import base64
+
 @app.post("/me/upload/image")
 async def upload_image(
+    background_tasks: BackgroundTasks,
     images: List[UploadFile] = File(...),
     media_id: UUID = Form(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+
 ):
+    print("Active driver connections (from API):", manager.active_connections.keys())
+
     if not images or all(not img.filename for img in images):
         raise HTTPException(status_code=400, detail="At least one valid image file is required.")
 
+    # Step 1: Save to DB or file system
     media = await update_or_create_media(
         db=db,
         user_id=current_user.id,
         images=images,
         media_id=media_id
     )
-    return {"message": "Images uploaded successfully"}
 
+    # Step 2: Find assigned driver
+    result = await db.execute(select(Assignment).where(Assignment.user_id == current_user.id))
+    assignment = result.scalar_one_or_none()
 
+    if assignment:
+        driver_id = assignment.driver_id
+        print(driver_id,"driver id")
+        images = media.image_path if media.image_path else []
+        print(images,"images")
+        # Step 1: Join back into a full string
+        stringified = ''.join(images)
+
+        # Step 2: Remove `{` and `}`
+        cleaned = stringified.strip("{}")
+
+        # Step 3: Split by comma to get proper list
+        image_paths = cleaned.split(',')
+
+        # Result
+        print(image_paths)
+
+        image_bytes_list = []
+        # BASE_DIR = os.getcwd()  # or use your project root explicitly
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # directory of this file
+
+        for img_path in image_paths:
+            # full_path = os.path.join(BASE_DIR, img_path)  # builds full path like 'uploads/images/xyz.png'
+            full_path = os.path.join(BASE_DIR, "uploads", "images", os.path.basename(img_path.strip()))
+
+            try:
+                with open(full_path, "rb") as f:
+                    content = f.read()
+                    base64_encoded = base64.b64encode(content).decode("utf-8")
+                    image_bytes_list.append({
+                        "filename": os.path.basename(img_path),
+                        "data": base64_encoded
+                    })
+            except Exception as e:
+                print(f"Failed to read image {img_path}: {e}")
+
+        # Step 4: Send via WebSocket using background task
+        background_tasks.add_task(
+            send_images_via_websocket_to_driver,
+            driver_id,
+            {
+                "user_id": current_user.id,
+                "media_id": str(media_id),
+                "images": image_bytes_list,
+                "message": "User uploaded new images"
+            }
+        )
+
+    return {"message": "Images uploaded and sent to driver"}
+# async def send_images_via_websocket_to_driver(driver_id: int, payload: dict):
+#     ws: Optional[WebSocket] = manager.get_socket_by_driver_id(driver_id)
+#     if ws:
+#         try:
+#             await ws.send_json(payload)
+#         except Exception as e:
+#             print(f"Failed to send image to driver {driver_id}: {e}")
+#     else:
+#         print(f"No active WebSocket connection for driver {driver_id}")
+
+async def send_images_via_websocket_to_driver(driver_id: int, payload: dict):
+    socket = manager.get_socket_by_driver_id(driver_id)
+    if socket:
+        await manager.send_message(driver_id, payload)
+        print("success")
+    else:
+        print(f"No active WebSocket connection for driver {driver_id}")
 
 @app.post("/me/upload/audio")
 async def upload_audio(
@@ -285,14 +431,6 @@ async def submit_mobile_number(
     return {"message": "Mobile number submitted successfully"}
 
 
-# @app.post("/drivers", response_model=DriverOut)
-# async def register_driver(driver: DriverCreate, db: AsyncSession = Depends(get_db)):
-#     existing = await crud.get_driver_by_mobile(db, driver.mobile)
-#     if existing:
-#         raise HTTPException(status_code=400, detail="Mobile number already exists")
-#
-#     return await crud.create_driver(db, driver)
-
 @app.post("/drivers", response_model=DriverWithTokenOut)
 async def register_driver(driver: DriverCreate, db: AsyncSession = Depends(get_db)):
     existing = await crud.get_driver_by_mobile(db, driver.mobile)
@@ -320,20 +458,40 @@ async def register_driver(driver: DriverCreate, db: AsyncSession = Depends(get_d
 async def list_all_drivers(db: AsyncSession = Depends(get_db)):
     return await crud.get_all_drivers(db)
 
+# app/websocket_manager.py
+
+
+
+# async def notify_driver(driver_id: int, payload: dict):
+#     ws = connected_drivers.get(driver_id)
+#     if ws:
+#         await ws.send_json(payload)
+
+# @app.websocket("/ws/driver/{driver_id}")
+# async def websocket_endpoint(websocket: WebSocket, driver_id: int):
+#     # print(connected_drivers,"connected drivers")
+#     await websocket.accept()
+#     connected_drivers[int(driver_id)] = websocket
+#     try:
+#         while True:
+#             await websocket.receive_text()  # Keep connection alive
+#     except WebSocketDisconnect:
+#         connected_drivers.pop(int(driver_id), None)
 
 @app.websocket("/ws/driver/{driver_id}")
-async def driver_ws(websocket: WebSocket, driver_id: int):
+async def websocket_endpoint(websocket: WebSocket, driver_id: int):
+    print(f"Driver {driver_id} connected via WebSocket")
     await manager.connect(driver_id, websocket)
     try:
         while True:
-            data = await websocket.receive_json()
-            # data could be {"lat": ..., "lng": ...}
-            save_driver_location(driver_id, data)
+            await websocket.receive_text()  # Keep alive
     except WebSocketDisconnect:
         manager.disconnect(driver_id)
+        print(f"Driver {driver_id} disconnected")
 
-async def notify_driver(driver_id: int, message: dict):
-    await manager.send_message(driver_id, message)
+
+# async def notify_driver(driver_id: int, message: dict):
+#     await manager.send_message(driver_id, message)
 
 
 @app.post("/driver/location")
@@ -470,3 +628,10 @@ async def generate_user_token(data: UserTokenInput):
         "token_type": "bearer",
         "note": "This token is for testing purposes only"
     }
+# async def send_media_to_driver(user: User, driver: Driver, media: MediaData):
+#     message = {
+#         "user_name": f"{user.first_name} {user.last_name}",
+#         "image_paths": media.image_path,
+#         "audio_paths": media.audio_path,
+#     }
+#     await manager.send_message(driver.id, message)
